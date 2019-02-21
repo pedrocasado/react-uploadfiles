@@ -1,26 +1,99 @@
 import React, { Component } from 'react';
-import logo from './logo.svg';
-import './App.css';
+import uniqueId from 'lodash';
+import filesize from 'filesize';
+import api from './services/api';
+
+import GlobalStyle from './styles/global';
+import { Container, Content } from './styles';
+import Upload from './components/Upload';
+import FileList from './components/FileList';
 
 class App extends Component {
+
+  state = {
+    uploadedFiles: [],
+
+  };
+
+  handleUpload = files => {
+
+    console.log(files);
+
+    const uploadedFiles = files.map(file => ({
+      file,
+      id: uniqueId(),
+      name: file.name,
+      readableSize: filesize(file.size),
+      preview: URL.createObjectURL(file),
+      progress: 0,
+      uploaded: false,
+      error: false,
+      url: null,
+    }));
+
+    this.setState({
+      uploadedFiles: this.state.uploadedFiles.concat(uploadedFiles)
+    });
+
+    uploadedFiles.forEach(this.processUpload);
+
+  };
+
+  updateFile = (id, data) => {
+
+    this.setState({ 
+      uploadedFiles: this.state.uploadedFiles.map(uploadedFile => {
+
+        if (id == uploadedFile.id) {
+          return { ... uploadedFile, ... data }
+        }
+
+        return uploadedFile;
+
+      }) 
+    })
+  };
+
+  // request to backend to upload to s3
+  processUpload = (uploadedFile) => {
+    
+    // submit of a html form
+    const data = new FormData();
+
+    data.append('file', uploadedFile.file, uploadedFile.name);
+
+    api.post('/api/post/new', data, {
+
+      // retorna o progresso da requisicao (usado no loader)
+      onUploadProgress: e => {
+        const progress = parseInt(Math.rount((e.loader*100)/e.total));
+
+        this.updateFile(uploadedFile.id, {
+          progress,
+        })
+      }
+
+    });
+
+  };
+
   render() {
+
+    const { uploadedFiles } = this.state;
+
     return (
-      <div className="App">
-        <header className="App-header">
-          <img src={logo} className="App-logo" alt="logo" />
-          <p>
-            Edit <code>src/App.js</code> and save to reload.
-          </p>
-          <a
-            className="App-link"
-            href="https://reactjs.org"
-            target="_blank"
-            rel="noopener noreferrer"
-          >
-            Learn React
-          </a>
-        </header>
-      </div>
+      <Container>
+        <Content>
+
+          <Upload onUpload={this.handleUpload} />
+          { !! uploadedFiles.length && (
+            <FileList files={uploadedFiles} />
+          )}
+
+        </Content>
+
+        <GlobalStyle />
+      </Container>
     );
   }
 }
